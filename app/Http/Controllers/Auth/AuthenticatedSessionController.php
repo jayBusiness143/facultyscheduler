@@ -15,12 +15,20 @@ class AuthenticatedSessionController extends Controller
      */
     public function store(LoginRequest $request): JsonResponse
     {
-        $request->authenticate();
+        try {
+            // Use the authenticate method from LoginRequest
+            $request->authenticate();
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            // Check if the email exists
+            if (!$request->emailExists()) {
+                return response()->json(['message' => 'Email is invalid'], 401);
+            }
 
-        // Get the authenticated user
+            // If email exists but authentication failed, the password is incorrect
+            return response()->json(['message' => 'Password is invalid'], 401);
+        }
+
         $user = Auth::user();
-
-        // Create a new token for API authentication (requires Laravel Sanctum)
         $token = $user->createToken('api-token')->plainTextToken;
 
         return response()->json([
