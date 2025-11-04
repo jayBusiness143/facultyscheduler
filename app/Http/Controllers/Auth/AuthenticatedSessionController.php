@@ -44,7 +44,18 @@ class AuthenticatedSessionController extends Controller
     public function destroy(Request $request): JsonResponse
     {
         // Revoke the token that was used to authenticate the current request
-        $request->user()->currentAccessToken()->delete();
+        $user = $request->user();
+
+        // If there's no authenticated user, return 401 (Unauthorized)
+        if (! $user) {
+            return response()->json(['message' => 'Not authenticated'], 401);
+        }
+
+        // If the user has a current access token, delete it. Use null checks to avoid errors.
+        $currentToken = $user->currentAccessToken();
+        if ($currentToken) {
+            $currentToken->delete();
+        }
 
         return response()->json([
             'message' => 'Logout successful'
