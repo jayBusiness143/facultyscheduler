@@ -155,11 +155,33 @@ class CurriculumController extends Controller
     public function get_program()
     {
         try {
-            $programs = Program::get()->whereIn('status', 0);
+            // Select programs and include totals calculated from subjects linked via semesters
+            $programs = Program::select('programs.*')
+                ->selectSub(function($query) {
+                    $query->from('subjects')
+                          ->join('semesters', 'subjects.semester_id', '=', 'semesters.id')
+                          ->whereColumn('semesters.program_id', 'programs.id')
+                          ->selectRaw('COUNT(subjects.id)');
+                }, 'total_subjects')
+                ->selectSub(function($query) {
+                    $query->from('subjects')
+                          ->join('semesters', 'subjects.semester_id', '=', 'semesters.id')
+                          ->whereColumn('semesters.program_id', 'programs.id')
+                          ->selectRaw('COALESCE(SUM(subjects.total_units), 0)');
+                }, 'total_units')
+                ->where('status', 0)
+                ->get();
+
+            // Cast aggregated values to integers to ensure numeric JSON types
+            $programs->transform(function ($p) {
+                $p->total_subjects = isset($p->total_subjects) ? (int) $p->total_subjects : 0;
+                $p->total_units = isset($p->total_units) ? (int) $p->total_units : 0;
+                return $p;
+            });
 
             return response()->json([
                 'programs' => $programs
-            ], 200); 
+            ], 200);
 
         } catch (\Exception $e) {
             return response()->json([
