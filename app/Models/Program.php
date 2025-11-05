@@ -13,6 +13,7 @@ class Program extends Model
         'abbreviation',
         'year_from',
         'year_to',
+        'status',
     ];
 
     public function semesters()

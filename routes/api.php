@@ -6,6 +6,7 @@ use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\CurriculumController;
 use App\Http\Controllers\FacultyController;
+use App\Http\Controllers\SubjectController;
 
 // Route to get the authenticated user's information
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
@@ -34,10 +35,17 @@ Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])
         Route::get('/department-program', [CurriculumController::class, 'department_program'])->name('department-program');
         Route::post('/edit-program/{id}', [CurriculumController::class, 'edit_program'])->name('edit-program');
         Route::post('/delete-program/{id}', [CurriculumController::class, 'delete_program'])->name('delete-program');
-    
+        Route::post('/restore-program/{id}', [CurriculumController::class, 'restore']);
+        
+        Route::put('/semesters/{semester}/status', [CurriculumController::class, 'updateStatus']);
         Route::post('/semester-with-subjects', [CurriculumController::class, 'add_semester_with_subjects'])->name('semester.with-subjects.add');
         Route::get('/semester-with-subjects', [CurriculumController::class, 'get_semester_with_subjects'])->name('semester.with-subjects.get');
+        Route::put('/semesters/{semester}/rename', [CurriculumController::class, 'rename']);
 
         Route::apiResource('faculties', FacultyController::class);
         Route::post('/faculties/{id}/activate', [FacultyController::class, 'activate']);
+
+        Route::post('/semesters/{semester}/subjects', [SubjectController::class, 'store']);
+        Route::put('/subjects/{subject}', [SubjectController::class, 'update']);
+        Route::delete('/subjects/{subject}', [SubjectController::class, 'destroy']);
     });

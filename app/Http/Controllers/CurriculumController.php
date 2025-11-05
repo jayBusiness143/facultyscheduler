@@ -59,6 +59,66 @@ class CurriculumController extends Controller
         }
     }
 
+    public function updateStatus(Request $request, Semester $semester)
+    {
+        // 1. New, more powerful validation rules
+        $validated = $request->validate([
+            'status' => 'required|boolean',
+            // 'start_date' is only required if the status is 1 (inactive).
+            'start_date' => 'required_if:status,1|nullable|date',
+            // 'end_date' is also required if status is 1 and must be after the start_date.
+            'end_date' => 'required_if:status,1|nullable|date|after_or_equal:start_date',
+        ]);
+
+        // 2. Conditional Logic for updating
+        if ($validated['status'] == 1) {
+            // Deactivating: Update status and set the provided dates.
+            $semester->update([
+                'status' => 1,
+                'start_date' => $validated['start_date'],
+                'end_date' => $validated['end_date'],
+            ]);
+        } else {
+            // Activating: Update status and clear the dates. This is crucial for data integrity.
+            $semester->update([
+                'status' => 0,
+                'start_date' => null,
+                'end_date' => null,
+            ]);
+        }
+
+        // 3. Return the successful response
+        return response()->json([
+            'message' => 'Semester status updated successfully!',
+            // Eager load relationships if you need them on the frontend after update
+            'semester' => $semester->fresh(), 
+        ]);
+    }
+
+    public function rename(Request $request, Semester $semester)
+    {
+        $validated = $request->validate([
+            'year_level' => ['required', 'string', 'max:255'],
+            'semester_level' => [
+                'required',
+                'string',
+                'max:255',
+                Rule::unique('semesters')->where(function ($query) use ($request, $semester) {
+                    return $query->where('year_level', $request->year_level)
+                                 ->where('program_id', $semester->program_id);
+                })->ignore($semester->id),
+            ],
+        ], [
+            'semester_level.unique' => 'This year level and semester combination already exists for this program.',
+        ]);
+
+        $semester->update($validated);
+        return response()->json([
+            'message' => 'Semester renamed successfully!',
+            'semester' => $semester, 
+        ]);
+    }
+
     public function add_semester_with_subjects(Request $request)
     {
         // Step 1: I-validate ang lahat ng data, kasama ang nested array ng subjects
@@ -152,6 +212,16 @@ class CurriculumController extends Controller
         }
     }
 
+    public function restore(Program $id)
+    {
+        // Update the status back to 0 (active)
+        $id->update(['status' => 0]);
+
+        return response()->json([
+            'message' => 'Program restored successfully.'
+        ]);
+    }
+
     public function get_program()
     {
         try {
@@ -169,7 +239,7 @@ class CurriculumController extends Controller
                           ->whereColumn('semesters.program_id', 'programs.id')
                           ->selectRaw('COALESCE(SUM(subjects.total_units), 0)');
                 }, 'total_units')
-                ->where('status', 0)
+                
                 ->get();
 
             // Cast aggregated values to integers to ensure numeric JSON types
