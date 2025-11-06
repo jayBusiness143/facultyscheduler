@@ -34,7 +34,7 @@ Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])
         Route::get('/program', [CurriculumController::class, 'get_program'])->name('get-program');
         Route::get('/department-program', [CurriculumController::class, 'department_program'])->name('department-program');
         Route::post('/edit-program/{id}', [CurriculumController::class, 'edit_program'])->name('edit-program');
-        Route::post('/delete-program/{id}', [CurriculumController::class, 'delete_program'])->name('delete-program');
+        Route::post('/archive-program/{id}', [CurriculumController::class, 'archive_program'])->name('archive-program');
         Route::post('/restore-program/{id}', [CurriculumController::class, 'restore']);
         
         Route::put('/semesters/{semester}/status', [CurriculumController::class, 'updateStatus']);

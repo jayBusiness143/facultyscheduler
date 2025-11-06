@@ -317,7 +317,7 @@ class CurriculumController extends Controller
         }
     }
 
-    public function delete_program(Program $id) // Gamit og Route Model Binding
+    public function archive_program(Program $id) // Gamit og Route Model Binding
     {
         try {
             // Ang Program::findOrFail($id) dili na kinahanglan

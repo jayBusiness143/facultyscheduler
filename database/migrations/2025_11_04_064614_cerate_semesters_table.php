@@ -17,8 +17,8 @@ return new class extends Migration
             $table->foreignId('program_id')->constrained('programs')->onDelete('cascade');
             $table->string('year_level');
             $table->string('semester_level');
-            $table->integer('status')->default(0)->comment("0 = active, 1 = inactive"); 
-            $table->date('start_date')->nullable(); // Dili na kinahanglan ang ->after() pero okay ra naa
+            $table->integer('status')->default(0)->comment("0 = inactive, 1 = active"); 
+            $table->date('start_date')->nullable(); 
             $table->date('end_date')->nullable();
             $table->timestamps();
         });
