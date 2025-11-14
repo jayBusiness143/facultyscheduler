@@ -9,9 +9,23 @@ use Illuminate\Validation\Rule;
 
 class SubjectController extends Controller
 {
+
+    public function get_subjects()
+    {
+        // Return only subjects whose related semester has status = 1
+        $subjects = Subject::whereHas('semester', function ($query) {
+            $query->where('status', 1);
+        })->with('semester')->get();
+
+        return response()->json([
+            'subject' => $subjects
+        ], 200);
+    }
     /**
      * Add a new subject to a specific semester.
      */
+
+
     public function store(Request $request, Semester $semester)
     {
         $validatedData = $request->validate([

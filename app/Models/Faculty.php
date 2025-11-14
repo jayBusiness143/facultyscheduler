@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use App\Models\User;
 use App\Models\Expertise;
+use App\Models\FacultyAvailability;
 
 class Faculty extends Model
 {
@@ -29,4 +30,10 @@ class Faculty extends Model
     {
         return $this->hasMany(Expertise::class);
     }
+
+    public function availabilities()    {
+        return $this->hasMany(FacultyAvailability::class);
+    }
+
+    
 }

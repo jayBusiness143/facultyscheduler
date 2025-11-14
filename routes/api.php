@@ -44,7 +44,10 @@ Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])
 
         Route::apiResource('faculties', FacultyController::class);
         Route::post('/faculties/{id}/activate', [FacultyController::class, 'activate']);
+        Route::post('/faculties/{faculty}/availability', [FacultyController::class, 'setAvailability']);
+        Route::get('/faculties/{faculty}/availability', [FacultyController::class, 'getAvailability']);
 
+        Route::get('/get-subjects', [SubjectController::class, 'get_subjects']);
         Route::post('/semesters/{semester}/subjects', [SubjectController::class, 'store']);
         Route::put('/subjects/{subject}', [SubjectController::class, 'update']);
         Route::delete('/subjects/{subject}', [SubjectController::class, 'destroy']);

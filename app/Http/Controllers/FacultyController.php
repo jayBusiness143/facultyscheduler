@@ -9,6 +9,8 @@ use App\Models\User;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\ValidationException;
 
 class FacultyController extends Controller
 {
@@ -290,5 +292,75 @@ class FacultyController extends Controller
         } catch (\Exception $e) {
             return response()->json(['message' => 'Failed to activate faculty.', 'error' => $e->getMessage()], 500);
         }
+    }
+
+    public function setAvailability(Request $request, Faculty $faculty)
+    {
+        // Step 1: Validate the incoming data from the frontend.
+        $validator = Validator::make($request->all(), [
+            '*.*.start' => 'required|date_format:H:i,H:i:s',
+            '*.*.end'   => 'required|date_format:H:i,H:i:s|after:*.*.start',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['message' => 'Validation failed', 'errors' => $validator->errors()], 422);
+        }
+
+        $validatedData = $validator->validated();
+        
+        try {
+            // Step 2: Use a transaction to ensure all database actions succeed or none do.
+            DB::transaction(function () use ($faculty, $validatedData) {
+                
+                // Step 3: Delete all old records from 'faculty_availabilities' for this faculty.
+                $faculty->availabilities()->delete();
+
+                // Step 4: Prepare the new data for insertion.
+                $newSlotsToSave = [];
+                foreach ($validatedData as $day => $slots) {
+                    if (is_array($slots) && !empty($slots)) {
+                        foreach ($slots as $slot) {
+                            $newSlotsToSave[] = [
+                                'day_of_week' => $day,
+                                'start_time'  => $slot['start'],
+                                'end_time'    => $slot['end'],
+                            ];
+                        }
+                    }
+                }
+
+                // Step 5: SAVE THE DATA TO THE 'faculty_availabilities' TABLE.
+                // This is the final command that performs the database insert.
+                if (!empty($newSlotsToSave)) {
+                    $faculty->availabilities()->createMany($newSlotsToSave);
+                }
+            });
+
+        } catch (\Exception $e) {
+            return response()->json(['message' => 'Database error: Could not save the schedule.'], 500);
+        }
+
+        // Step 6: Confirm success.
+        return response()->json(['message' => "Availability for {$faculty->user->name} was successfully saved."]);
+    }
+
+    public function getAvailability(Faculty $faculty)
+    {
+        // Load the availabilities using the Eloquent relationship
+        $availabilities = $faculty->availabilities;
+
+        // Transform the flat database collection into a grouped structure that the frontend expects.
+        // e.g., { "Monday": [{id: 1, start: "09:00", end: "11:00"}], ... }
+        $formatted = $availabilities->groupBy('day_of_week')->map(function ($daySlots) {
+            return $daySlots->map(function ($slot) {
+                return [
+                    'id'    => $slot->id, // The frontend needs an ID for the key
+                    'start' => date('H:i', strtotime($slot->start_time)), // Format to HH:mm
+                    'end'   => date('H:i', strtotime($slot->end_time)),   // Format to HH:mm
+                ];
+            });
+        });
+
+        return response()->json($formatted);
     }
 }
