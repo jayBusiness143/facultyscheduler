@@ -7,6 +7,7 @@ use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\CurriculumController;
 use App\Http\Controllers\FacultyController;
 use App\Http\Controllers\SubjectController;
+use App\Http\Controllers\RoomController;
 
 // Route to get the authenticated user's information
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
@@ -51,4 +52,9 @@ Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])
         Route::post('/semesters/{semester}/subjects', [SubjectController::class, 'store']);
         Route::put('/subjects/{subject}', [SubjectController::class, 'update']);
         Route::delete('/subjects/{subject}', [SubjectController::class, 'destroy']);
+
+        Route::apiResource('rooms', RoomController::class);
+        Route::post('/rooms/{room}/availabilities', [RoomController::class, 'storeRoomAvailability']);
+        Route::get('/rooms/{room}/availabilities', [RoomController::class, 'getRoomAvailability']);
+        Route::delete('/availabilities/{availability}', [RoomController::class, 'destroyRoomAvailability']);
     });
