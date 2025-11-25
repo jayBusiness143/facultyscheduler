@@ -58,6 +58,29 @@ class RoomController extends Controller
     }
 
     /**
+     * Get availabilities for all rooms (sorted by roomNumber, then day and start_time)
+     */
+    public function getAllRoomsAvailability()
+{
+        try {
+            // Kuhaon ang tanan nga rooms ug i-sort base sa roomNumber, ascending
+            $rooms = Room::get();
+
+            // I-return ang lista sa rooms isip JSON
+            return response()->json([
+                'rooms' => $rooms
+            ], 200); // 200 OK
+
+        } catch (\Exception $e) {
+            // Kung naay error, i-return ang 500 status
+            return response()->json([
+                'message' => 'An error occurred while fetching rooms.',
+                'error' => $e->getMessage()
+            ], 500); // 500 Internal Server Error
+        }
+    }
+
+    /**
      * Show the form for creating a new resource.
      */
     public function create()

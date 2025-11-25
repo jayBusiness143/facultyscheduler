@@ -15,6 +15,8 @@ class Room extends Model
 
     public function availabilities()
     {
-        return $this->hasMany(RoomAvailability::class);
+        return $this->hasMany(RoomAvailability::class, 'room_id');
     }
+
+    
 }

@@ -56,5 +56,7 @@ Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])
         Route::apiResource('rooms', RoomController::class);
         Route::post('/rooms/{room}/availabilities', [RoomController::class, 'storeRoomAvailability']);
         Route::get('/rooms/{room}/availabilities', [RoomController::class, 'getRoomAvailability']);
+        // Get availabilities for all rooms
+        Route::get('/rooms/availabilities', [RoomController::class, 'getAllRoomsAvailability']);
         Route::delete('/availabilities/{availability}', [RoomController::class, 'destroyRoomAvailability']);
     });
