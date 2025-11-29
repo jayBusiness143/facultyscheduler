@@ -8,6 +8,7 @@ use App\Http\Controllers\CurriculumController;
 use App\Http\Controllers\FacultyController;
 use App\Http\Controllers\SubjectController;
 use App\Http\Controllers\RoomController;
+use App\Http\Controllers\FacultyLoadingController;
 
 // Route to get the authenticated user's information
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
@@ -28,6 +29,7 @@ Route::post('/login', [AuthenticatedSessionController::class, 'store'])
 Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])
     ->middleware('auth:sanctum')
     ->name('logout');
+
 
 // --- IGNORE ---
     Route::middleware(['auth:sanctum'])->group(function () {
@@ -53,10 +55,14 @@ Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])
         Route::put('/subjects/{subject}', [SubjectController::class, 'update']);
         Route::delete('/subjects/{subject}', [SubjectController::class, 'destroy']);
 
-        Route::apiResource('rooms', RoomController::class);
-        Route::post('/rooms/{room}/availabilities', [RoomController::class, 'storeRoomAvailability']);
-        Route::get('/rooms/{room}/availabilities', [RoomController::class, 'getRoomAvailability']);
-        // Get availabilities for all rooms
+                // Get availabilities for all rooms
         Route::get('/rooms/availabilities', [RoomController::class, 'getAllRoomsAvailability']);
+        Route::apiResource('rooms', RoomController::class);
+        Route::post('/rooms/{room}/availabilities', [RoomController::class, 'storeRoomAvailability'])->whereNumber('room');
+        Route::get('/rooms/{room}/availabilities', [RoomController::class, 'getRoomAvailability'])->whereNumber('room');
         Route::delete('/availabilities/{availability}', [RoomController::class, 'destroyRoomAvailability']);
+
+       Route::get('/dashboard/today-statistics', [FacultyLoadingController::class, 'getTodayScheduleStatistics']);
+        Route::get('/faculty-loading/{facultyId}/schedules', [FacultyLoadingController::class, 'getFacultySchedule']);
+        Route::post('/faculty-loading/assign', [FacultyLoadingController::class, 'assignSubject']);
     });

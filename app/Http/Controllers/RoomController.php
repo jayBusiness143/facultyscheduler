@@ -64,7 +64,7 @@ class RoomController extends Controller
 {
         try {
             // Kuhaon ang tanan nga rooms ug i-sort base sa roomNumber, ascending
-            $rooms = Room::get();
+            $rooms = Room::with('availabilities')->get();
 
             // I-return ang lista sa rooms isip JSON
             return response()->json([
