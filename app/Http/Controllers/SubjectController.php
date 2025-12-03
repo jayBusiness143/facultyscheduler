@@ -9,6 +9,32 @@ use Illuminate\Validation\Rule;
 
 class SubjectController extends Controller
 {
+    public function filterSubjects(Request $request)
+    {
+        // 1. Get the search term from the request
+        // Accepts ?subject=Introduction...
+        $searchTerm = $request->input('subject');
+
+        if (!$searchTerm) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Please provide a subject to search.'
+            ], 400);
+        }
+
+        // 2. Query the database
+        // We search in 'des_title' AND 'subject_code' for better UX
+        $subjects = Subject::where('des_title', 'LIKE', "%{$searchTerm}%")
+            ->orWhere('subject_code', 'LIKE', "%{$searchTerm}%")
+            ->select('id', 'subject_code', 'des_title', 'total_lec_hrs', 'total_lab_hrs', 'total_hrs') // Only select specific columns
+            ->get();
+
+        // 3. Return the response
+        return response()->json([
+            'success' => true,
+            'data' => $subjects
+        ], 200);
+    }
 
     public function get_subjects()
     {

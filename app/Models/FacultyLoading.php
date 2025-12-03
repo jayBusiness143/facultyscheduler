@@ -5,7 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
-class Schedule extends Model
+class FacultyLoading extends Model
 {
      use HasFactory;
 
@@ -13,6 +13,7 @@ class Schedule extends Model
         'faculty_id',
         'subject_id',
         'room_id',
+        'section',
         'type',
         'day',
         'start_time',

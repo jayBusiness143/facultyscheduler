@@ -9,6 +9,7 @@ use App\Http\Controllers\FacultyController;
 use App\Http\Controllers\SubjectController;
 use App\Http\Controllers\RoomController;
 use App\Http\Controllers\FacultyLoadingController;
+use App\Http\Controllers\ScheduleController;
 
 // Route to get the authenticated user's information
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
@@ -33,6 +34,7 @@ Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])
 
 // --- IGNORE ---
     Route::middleware(['auth:sanctum'])->group(function () {
+        // Admin Routes
         Route::post('/add-program', [CurriculumController::class, 'add_program'])->name('add-program');
         Route::get('/program', [CurriculumController::class, 'get_program'])->name('get-program');
         Route::get('/department-program', [CurriculumController::class, 'department_program'])->name('department-program');
@@ -54,6 +56,7 @@ Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])
         Route::post('/semesters/{semester}/subjects', [SubjectController::class, 'store']);
         Route::put('/subjects/{subject}', [SubjectController::class, 'update']);
         Route::delete('/subjects/{subject}', [SubjectController::class, 'destroy']);
+        Route::get('/filter-subjects', [SubjectController::class, 'filterSubjects']);
 
                 // Get availabilities for all rooms
         Route::get('/rooms/availabilities', [RoomController::class, 'getAllRoomsAvailability']);
@@ -62,7 +65,19 @@ Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])
         Route::get('/rooms/{room}/availabilities', [RoomController::class, 'getRoomAvailability'])->whereNumber('room');
         Route::delete('/availabilities/{availability}', [RoomController::class, 'destroyRoomAvailability']);
 
-       Route::get('/dashboard/today-statistics', [FacultyLoadingController::class, 'getTodayScheduleStatistics']);
+        Route::get('/dashboard/today-statistics', [FacultyLoadingController::class, 'getTodayScheduleStatistics']);
         Route::get('/faculty-loading/{facultyId}/schedules', [FacultyLoadingController::class, 'getFacultySchedule']);
+        Route::get('/get-faculty-loading', [FacultyLoadingController::class, 'getFacultyLoading']);
         Route::post('/faculty-loading/assign', [FacultyLoadingController::class, 'assignSubject']);
+        Route::get('/section-schedule', [FacultyLoadingController::class, 'getFacultySchedules']);
+        Route::get('/faculties/{id}/current-load', [FacultyLoadingController::class, 'getCurrentLoad']);
+        Route::get('/get-facultyLoading-reports', [FacultyLoadingController::class, 'getFacultyLoadingReports']);
+        Route::get('/get-classSchedule-reports', [FacultyLoadingController::class, 'getClassScheduleReports']);
+
+        Route::post('/create-schedule', [ScheduleController::class, 'store']);
+        Route::post('/filter-schedule', [ScheduleController::class, 'index']);
+        Route::get('/get-schedule', [ScheduleController::class, 'getSchedules']);
+        Route::get('/schedules/room/{roomId}', [ScheduleController::class, 'getScheduleByRoomId']);
+
+        
     });

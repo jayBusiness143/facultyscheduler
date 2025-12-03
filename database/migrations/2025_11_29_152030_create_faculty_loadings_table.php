@@ -11,13 +11,13 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('schedules', function (Blueprint $table) {
+        Schema::create('faculty_loadings', function (Blueprint $table) {
             $table->id();
             $table->foreignId('faculty_id')->constrained()->onDelete('cascade');
             $table->foreignId('subject_id')->constrained()->onDelete('cascade');
             $table->foreignId('room_id')->constrained()->onDelete('cascade');
-            $table->string('type'); // e.g., 'Lecture', 'Lab', etc.
-            $table->string('day'); // 'Monday', 'Tuesday', etc.
+            $table->string('type'); 
+            $table->string('day'); 
             $table->time('start_time');
             $table->time('end_time');
             $table->timestamps();
@@ -29,6 +29,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('schedules');
+        Schema::dropIfExists('faculty_loadings');
     }
 };

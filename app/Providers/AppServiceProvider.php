@@ -28,9 +28,18 @@ class AppServiceProvider extends ServiceProvider
             return config('app.frontend_url')."/password-reset/$token?email={$notifiable->getEmailForPasswordReset()}";
         });
 
-        // Define a rate limiter for API requests
+        // Define a rate limiter for API requests.
+        // Use `API_RATE_LIMIT` in .env to customize the limit (requests per minute).
+        // Set `API_RATE_LIMIT=0` to effectively disable throttling during local development.
         RateLimiter::for('api', function (Request $request) {
-            return Limit::perMinute(60)->by(optional($request->user())->id ?: $request->ip());
+            $limit = (int) env('API_RATE_LIMIT', 60);
+
+            if ($limit <= 0) {
+                // Very large limit to effectively disable throttling without relying on Limit::none()
+                return Limit::perMinute(PHP_INT_MAX)->by(optional($request->user())->id ?: $request->ip());
+            }
+
+            return Limit::perMinute($limit)->by(optional($request->user())->id ?: $request->ip());
         });
     }
 }
