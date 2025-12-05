@@ -10,6 +10,8 @@ use App\Http\Controllers\SubjectController;
 use App\Http\Controllers\RoomController;
 use App\Http\Controllers\FacultyLoadingController;
 use App\Http\Controllers\ScheduleController;
+use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\ReportController;
 
 // Route to get the authenticated user's information
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
@@ -79,5 +81,10 @@ Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])
         Route::get('/get-schedule', [ScheduleController::class, 'getSchedules']);
         Route::get('/schedules/room/{roomId}', [ScheduleController::class, 'getScheduleByRoomId']);
 
-        
+        Route::get('/kpi', [DashboardController::class, 'getKpiData']);
+        Route::get('/weekly-schedule', [DashboardController::class, 'getWeeklyScheduleData']);
+        Route::get('/faculty-load', [DashboardController::class, 'getFacultyLoadDistribution']);
+
+        Route::get('/reports/kpis', [ReportController::class, 'getKpiData']);
+
     });

@@ -105,101 +105,195 @@ class FacultyLoadingController extends Controller
             'schedules.*.roomId' => 'required|exists:rooms,id',
         ]);
 
-        try {
-            DB::beginTransaction();
+        DB::beginTransaction();
 
+        try {
             $facultyId = $request->facultyId;
             $subjectId = $request->subjectId;
 
-            // Fetch faculty load limits
-            $faculty = Faculty::findOrFail($facultyId);
+            $faculty = Faculty::select('id', 't_load_units', 'overload_units')
+                ->with(['loadings.subject' => function ($q) {
+                    $q->select('id', 'total_hrs', 'total_lec_hrs', 'total_lab_hrs');
+                }])
+                ->findOrFail($facultyId);
+
             $maxNormalLoad = $faculty->t_load_units ?? 0;
             $maxOverload = $faculty->overload_units ?? 0;
-            $totalAllowedLoad = $maxNormalLoad + $maxOverload;
+            $totalAllowedLoad = (float)($maxNormalLoad + $maxOverload);
 
-            // Fetch subject
             $subject = Subject::findOrFail($subjectId);
-            
-            // 1. Calculate New Subject Units (Based on requested hierarchy: total_hrs OR L+L sum)
+
             $newSubjectUnits = $subject->total_hrs 
-                             ?? (($subject->total_lec_hrs ?? 0) + ($subject->total_lab_hrs ?? 0));
+                ?? (($subject->total_lec_hrs ?? 0) + ($subject->total_lab_hrs ?? 0));
             $newSubjectUnits = (float)$newSubjectUnits;
 
             if ($newSubjectUnits <= 0) {
-                throw new Exception("Cannot assign subject '{$subject->subject_code}' because its calculated unit load is 0. Please check the 'total_hrs', 'total_lec_hrs', and 'total_lab_hrs' columns.");
+                DB::rollBack();
+                return response()->json([
+                    'success' => false,
+                    'message' => "Cannot assign subject '{$subject->subject_code}' because its calculated unit load is 0."
+                ], 422);
             }
 
-            // 2. Calculate Current Assigned Units (Sum ALL sections)
-            $currentLoadUnits = FacultyLoading::where('faculty_id', $facultyId)
-                // FIX: Changed 'faculty_loading' to 'faculty_loadings'
-                ->join('subjects', 'faculty_loadings.subject_id', '=', 'subjects.id')
-                ->sum(DB::raw('COALESCE(subjects.total_hrs, (subjects.total_lec_hrs + subjects.total_lab_hrs), 0)'));
+            $currentLoadUnits = $faculty->loadings->sum(function ($loading) {
+                $s = $loading->subject;
+                return (float)($s->total_hrs ?? (($s->total_lec_hrs ?? 0) + ($s->total_lab_hrs ?? 0)));
+            });
 
-            // 3. Final load check
-            $potentialTotalLoad = (float)$currentLoadUnits + $newSubjectUnits;
+            $potentialTotalLoad = $currentLoadUnits + $newSubjectUnits;
             if ($potentialTotalLoad > $totalAllowedLoad) {
-                throw new Exception(
-                    "Load Limit Exceeded: Adding this subject ({$newSubjectUnits} units) " .
-                    "will result in a total load of {$potentialTotalLoad} units, " .
-                    "which exceeds the maximum allowed load of {$totalAllowedLoad} units " .
-                    "({$maxNormalLoad} Normal + {$maxOverload} Overload)."
-                );
+                DB::rollBack();
+                return response()->json([
+                    'success' => false,
+                    'message' => "Load Limit Exceeded: Adding this subject ({$newSubjectUnits} units) will result in {$potentialTotalLoad} units which exceeds max {$totalAllowedLoad}."
+                ], 422);
             }
 
-            // 4. Proceed with Schedule and Conflict Checks
             $createdSchedules = [];
-            foreach ($request->schedules as $sched) {
-                $times = explode('-', $sched['time']);
-                if (count($times) !== 2) {
-                    throw new Exception("Invalid time format for " . $sched['day']);
+            $validatedSchedules = []; // normalized already-processed schedules for intra-request checks
+            $errors = []; // structured errors keyed by schedule type ('LEC'|'LAB')
+
+            foreach ($request->schedules as $index => $sched) {
+                $type = strtoupper($sched['type']); // 'LEC' or 'LAB'
+                $day = $sched['day'];
+
+                // Parse time
+                $parts = explode('-', $sched['time']);
+                if (count($parts) !== 2) {
+                    $errors[$type] = ($errors[$type] ?? '') . "Invalid time format for schedule #".($index + 1).". ";
+                    continue;
                 }
-                $startTime = trim($times[0]);
-                $endTime = trim($times[1]);
-                
-                // --- CONFLICT CHECK 1: FACULTY CONFLICT ---
+
+                $startRaw = trim($parts[0]);
+                $endRaw = trim($parts[1]);
+
+                try {
+                    $start = Carbon::parse($startRaw);
+                    $end = Carbon::parse($endRaw);
+                } catch (\Exception $ex) {
+                    $errors[$type] = ($errors[$type] ?? '') . "Invalid time values for schedule #".($index + 1).": {$sched['time']}. ";
+                    continue;
+                }
+
+                if ($end->lessThanOrEqualTo($start)) {
+                    $errors[$type] = ($errors[$type] ?? '') . "End time must be after start time for schedule #".($index + 1).". ";
+                    continue;
+                }
+
+                $startTime = $start->format('H:i:s');
+                $endTime = $end->format('H:i:s');
+
+                $scheduleData = [
+                    'faculty_id' => $facultyId,
+                    'subject_id' => $subjectId,
+                    'room_id'    => $sched['roomId'],
+                    'type'       => $type,
+                    'day'        => $day,
+                    'start_time' => $startTime,
+                    'end_time'   => $endTime,
+                ];
+
+                // Intra-request conflict (with already validatedSchedules)
+                foreach ($validatedSchedules as $vs) {
+                    if ($vs['day'] === $day) {
+                        if ($startTime < $vs['end_time'] && $endTime > $vs['start_time']) {
+                            // mark both involved types (if different) or the same type
+                            $errors[$type] = ($errors[$type] ?? '') . "Conflict with another selected schedule on {$day} ({$startTime}-{$endTime}). ";
+                            // also mark the previously validated schedule type if desired
+                            $errors[$vs['type']] = ($errors[$vs['type']] ?? '') . "Conflict with another selected schedule on {$day} ({$vs['start_time']}-{$vs['end_time']}). ";
+                        }
+                    }
+                }
+
+                // DB check: faculty conflicts
                 $facultyConflict = FacultyLoading::where('faculty_id', $facultyId)
-                    ->where('day', $sched['day'])
-                    ->where(function ($query) use ($startTime, $endTime) {
-                        // Conflict condition: new_start < existing_end AND new_end > existing_start
-                        $query->where('start_time', '<', $endTime)
-                              ->where('end_time', '>', $startTime);
+                    ->where('day', $day)
+                    ->where(function ($q) use ($startTime, $endTime) {
+                        $q->where('start_time', '<', $endTime)
+                            ->where('end_time', '>', $startTime);
                     })
                     ->exists();
 
                 if ($facultyConflict) {
-                    throw new Exception("Conflict: Faculty is already assigned a class on {$sched['day']} from {$startTime} to {$endTime}. Assignment failed.");
+                    $errors[$type] = ($errors[$type] ?? '') . "Faculty is already assigned a class on {$day} from {$startTime} to {$endTime}. ";
                 }
 
-                // --- CONFLICT CHECK 2: ROOM CONFLICT ---
+                // DB check: room conflicts
                 $roomConflict = FacultyLoading::where('room_id', $sched['roomId'])
-                    ->where('day', $sched['day'])
-                    ->where(function ($query) use ($startTime, $endTime) {
-                        // Conflict condition: new_start < existing_end AND new_end > existing_start
-                        $query->where('start_time', '<', $endTime)
-                              ->where('end_time', '>', $startTime);
+                    ->where('day', $day)
+                    ->where(function ($q) use ($startTime, $endTime) {
+                        $q->where('start_time', '<', $endTime)
+                            ->where('end_time', '>', $startTime);
                     })
                     ->exists();
 
                 if ($roomConflict) {
-                    // Fetch room number for better user feedback
-                    $room = Room::find($sched['roomId']); 
-                    $roomNumber = $room ? $room->roomNumber : 'Unknown Room';
-
-                    throw new Exception("Conflict: Room {$roomNumber} is already occupied on {$sched['day']} from {$startTime} to {$endTime}. Assignment failed.");
+                    $room = Room::find($sched['roomId']);
+                    $roomNumber = $room ? ($room->roomNumber ?? $room->name ?? $room->id) : $sched['roomId'];
+                    $errors[$type] = ($errors[$type] ?? '') . "Room {$roomNumber} is already occupied on {$day} from {$startTime} to {$endTime}. ";
                 }
-                
-                // 5. Create the new schedule entry
-                $newSchedule = FacultyLoading::create([
-                    'faculty_id' => $facultyId,
-                    'subject_id' => $subjectId,
-                    'room_id'    => $sched['roomId'],
-                    'type'       => $sched['type'],
-                    'day'        => $sched['day'],
-                    'start_time' => $startTime,
-                    'end_time'   => $endTime,
-                ]);
 
-                $createdSchedules[] = $newSchedule;
+                // Room availability containment
+                $room = Room::with(['availabilities' => function($q) use ($day) {
+                    $q->where('day', $day);
+                }])->find($sched['roomId']);
+
+                if (!$room) {
+                    $errors[$type] = ($errors[$type] ?? '') . "Room not found (id: {$sched['roomId']}). ";
+                } else {
+                    $fits = false;
+                    foreach ($room->availabilities as $avail) {
+                        $aStart = Carbon::parse($avail->start_time ?? $avail->start)->format('H:i:s');
+                        $aEnd = Carbon::parse($avail->end_time ?? $avail->end)->format('H:i:s');
+                        if ($startTime >= $aStart && $endTime <= $aEnd) {
+                            $fits = true;
+                            break;
+                        }
+                    }
+                    if (!$fits) {
+                        $roomNumber = $room->roomNumber ?? $room->name ?? $room->id;
+                        $errors[$type] = ($errors[$type] ?? '') . "Room {$roomNumber} is not available on {$day} from {$startTime} to {$endTime}. ";
+                    }
+                }
+
+                // If this schedule accumulated no errors so far, add to validatedSchedules to be created
+                if (empty($errors[$type])) {
+                    $validatedSchedules[] = $scheduleData;
+                } else {
+                    // still add to validatedSchedules so later intra-request checks can reference it,
+                    // but mark that it had errors (do not create later)
+                    $validatedSchedules[] = $scheduleData + ['_has_error' => true];
+                }
+            } // end foreach schedules
+
+            if (!empty($errors)) {
+                // Normalize messages and add type prefixes for clarity
+                $formatted = [];
+                foreach ($errors as $k => $msg) {
+                    $label = strtoupper($k) === 'LEC' ? 'Lecture conflict: ' : (strtoupper($k) === 'LAB' ? 'Laboratory conflict: ' : '');
+                    $formatted[$k] = $label . trim($msg);
+                }
+
+                DB::rollBack();
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Schedule conflicts detected',
+                    'errors' => $formatted
+                ], 422);
+            }
+
+            // No errors -> create all validated schedules (those without _has_error)
+            foreach ($validatedSchedules as $s) {
+                if (!empty($s['_has_error'])) continue;
+                $createdSchedules[] = FacultyLoading::create([
+                    'faculty_id' => $s['faculty_id'],
+                    'subject_id' => $s['subject_id'],
+                    'room_id'    => $s['room_id'],
+                    'type'       => $s['type'],
+                    'day'        => $s['day'],
+                    'start_time' => $s['start_time'],
+                    'end_time'   => $s['end_time'],
+                ]);
             }
 
             DB::commit();
@@ -209,13 +303,13 @@ class FacultyLoadingController extends Controller
                 'message' => 'Subject assigned successfully.',
                 'data' => $createdSchedules
             ], 201);
-
-        } catch (Exception $e) {
+        } catch (\Exception $e) {
             DB::rollBack();
+            \Log::error("Faculty Assignment Error: " . $e->getMessage() . " on line " . $e->getLine() . " in " . $e->getFile());
             return response()->json([
                 'success' => false,
-                'message' => $e->getMessage()
-            ], 422);
+                'message' => 'Server error during assignment. Please try again.',
+            ], 500);
         }
     }
 

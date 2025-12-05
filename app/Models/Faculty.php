@@ -35,5 +35,10 @@ class Faculty extends Model
         return $this->hasMany(FacultyAvailability::class);
     }
 
+    public function loadings()
+    {
+        return $this->hasMany(FacultyLoading::class);
+    }
+
     
 }
