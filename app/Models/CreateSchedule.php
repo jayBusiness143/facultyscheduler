@@ -18,4 +18,9 @@ class CreateSchedule extends Model
     {
         return $this->belongsTo(FacultyLoading::class, 'faculty_loading_id');
     }
+
+     public function program()
+    {
+        return $this->belongsTo(Program::class);
+    }
 }

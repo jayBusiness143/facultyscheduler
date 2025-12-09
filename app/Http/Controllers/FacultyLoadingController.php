@@ -442,7 +442,7 @@ class FacultyLoadingController extends Controller
 
     public function getClassScheduleReports()
     {
-        $classSchedule = CreateSchedule::with('facultyLoading.faculty.user', 'facultyLoading.subject','facultyLoading.room')->get();
+        $classSchedule = CreateSchedule::with('facultyLoading.faculty.user', 'facultyLoading.subject','facultyLoading.room','program')->get();
 
         return response()->json([
             'success' => true,
