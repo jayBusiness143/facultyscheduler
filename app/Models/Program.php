@@ -20,4 +20,9 @@ class Program extends Model
     {
         return $this->hasMany(Semester::class);
     }
+
+    public function facultyLoadings()
+    {
+        return $this->hasMany(FacultyLoading::class);
+    }
 }

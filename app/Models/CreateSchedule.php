@@ -8,6 +8,7 @@ class CreateSchedule extends Model
 {
 
     protected $fillable = [
+        'program_id',
         'faculty_loading_id', 
         'year_level', 
         'section'
