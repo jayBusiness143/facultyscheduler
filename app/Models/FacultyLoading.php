@@ -33,6 +33,9 @@ class FacultyLoading extends Model
     { 
         return $this->belongsTo(Room::class); 
     }
-
+    public function program()    
+    { 
+        return $this->belongsTo(Program::class); 
+    }
    
 }
