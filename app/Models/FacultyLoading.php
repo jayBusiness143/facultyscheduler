@@ -37,5 +37,25 @@ class FacultyLoading extends Model
     { 
         return $this->belongsTo(Program::class); 
     }
+
+     // Para isama ang 'section' sa JSON output kahit wala sa database column
+    protected $appends = ['section']; 
+
+    // Relationship: One FacultyLoading can have many CreateSchedules
+    public function schedules()    
+    { 
+        return $this->hasMany(CreateSchedule::class, 'faculty_loading_id'); 
+    }
+
+    // ACCESSOR: Ito ang kukuha ng 'section' mula sa kaugnay na schedules
+    public function getSectionAttribute()
+    {
+        // Kukunin ang lahat ng section mula sa CreateSchedule records
+        $sections = $this->schedules->pluck('section')->toArray();
+        
+        // Kung may maraming section (e.g., Section A, Section B, Section C), pagsasamahin ito.
+        // Kung gusto mo lang ang una: $this->schedules->first()->section
+        return count($sections) > 0 ? implode(', ', $sections) : null;
+    }
    
 }
