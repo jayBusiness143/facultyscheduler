@@ -243,7 +243,25 @@ class RoomController extends Controller
      */
     public function destroy(string $id)
     {
-        //
+        try {
+            $room = Room::findOrFail($id);
+            $room->availabilities()->delete();
+            $room->delete();
+            return response()->json([
+                'message' => 'Room and all associated availability slots deleted successfully!'
+            ], 200);
+
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json([
+                'message' => 'Room not found.',
+                'error' => $e->getMessage()
+            ], 404);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Failed to delete room. It might be used by other records (e.g., Faculty Loading).',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
 
     public function destroyRoomAvailability(RoomAvailability $availability)

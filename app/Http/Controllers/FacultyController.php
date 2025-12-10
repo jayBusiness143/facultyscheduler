@@ -267,17 +267,16 @@ class FacultyController extends Controller
     public function destroy(Faculty $faculty)
     {
         try {
-            // Usbon lang ang status ngadto sa 1 (inactive)
-            $faculty->status = 1; 
-            $faculty->save();
+            // The database will automatically delete related expertises, availabilities, and loadings.
+            $faculty->delete(); 
 
             return response()->json([
-                'message' => 'Faculty moved to archives successfully!'
+                'message' => 'Faculty and all related data deleted successfully!'
             ], 200);
 
         } catch (\Exception $e) {
             return response()->json([
-                'message' => 'Failed to archive faculty.',
+                'message' => 'Failed to delete faculty.',
                 'error' => $e->getMessage()
             ], 500);
         }
