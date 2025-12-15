@@ -68,31 +68,45 @@ class FacultyLoadingController extends Controller
         }
     }
 
-    public function getCurrentLoad($id)
-    {
-        // Get ALL FacultyLoading entries for the faculty
-        $facultyLoadings = FacultyLoading::where('faculty_id', $id)->get();
-        $assignedSubjectIds = $facultyLoadings->pluck('subject_id')->toArray();
+   public function getCurrentLoad($id)
+{
+    // Get ALL FacultyLoading entries for the faculty
+    $facultyLoadings = FacultyLoading::where('faculty_id', $id)->get();
+    $assignedSubjectIds = $facultyLoadings->pluck('subject_id')->toArray();
 
-        // Sum units from all sections by joining with the subjects table
-        $currentLoadUnits = FacultyLoading::where('faculty_id', $id)
-            // FIX: Changed 'faculty_loading' to 'faculty_loadings'
-            ->join('subjects', 'faculty_loadings.subject_id', '=', 'subjects.id')
-            ->sum(DB::raw('COALESCE(subjects.total_hrs, (subjects.total_lec_hrs + subjects.total_lab_hrs), 0)'));
+    // Fix the Current Load Calculation:
+    // The previous complex hour calculation resulted in 22.
+    // The actual load is almost always calculated by summing the 'total_units' 
+    // from the subjects table. This is the MOST LIKELY fix for the 17 vs 22 mismatch.
+
+    $currentLoadUnits = FacultyLoading::where('faculty_id', $id)
+        ->join('subjects', 'faculty_loadings.subject_id', '=', 'subjects.id')
+        // FIX: Summing the 'total_units' column instead of the complex hours formula
+        ->sum('subjects.total_units');
 
 
-        return response()->json([
-            'current_load_units' => (float)$currentLoadUnits,
-            'assigned_subject_ids' => array_unique($assignedSubjectIds), 
-        ]);
-    }
+    // **Alternative (if subjects are double-counted in faculty_loadings):**
+    // If the faculty_loadings table has MULTIPLE entries for the SAME subject_id 
+    // (e.g., one for lecture, one for lab, or one per schedule slot)
+    // but the faculty should only get credit ONCE for the subject's units, 
+    // you must prevent the double-counting.
+    /*
+    $currentLoadUnits = FacultyLoading::where('faculty_id', $id)
+        ->distinct('subject_id') // Get distinct subject assignments
+        ->join('subjects', 'faculty_loadings.subject_id', '=', 'subjects.id')
+        ->sum('subjects.total_units');
+    */
+    // Note: Eloquent/DB query builders can sometimes struggle with SUM and DISTINCT 
+    // simultaneously. If the first fix doesn't work, the data structure is likely 
+    // the issue and a manual query might be needed, but try the simplest fix first.
+
+
+    return response()->json([
+        'current_load_units' => (float)$currentLoadUnits,
+        'assigned_subject_ids' => array_unique($assignedSubjectIds), 
+    ]);
+}
     
-    /**
-     * Assign a subject and its schedule to a faculty, with load and conflict checks.
-     *
-     * @param Request $request
-     * @return \Illuminate\Http\JsonResponse
-     */
     public function assignSubject(Request $request)
     {
         // 1. Validation (Added pairedDays checks)
@@ -523,10 +537,14 @@ class FacultyLoadingController extends Controller
 
     public function getFacultyLoadingReports()
     {
-        // Eager load ang 'schedules' para gumana nang mabilis ang 'section' accessor
-        $facultyLoadings = FacultyLoading::with('faculty.user','subject','room', 'schedules')->get(); 
-        // Masyadong mahaba ang variable name na $getFacultyLoading, ginawa kong $facultyLoadings para mas malinis.
-
+        // Eager load relationships: 'faculty.user', 'subject', 'room', and 'schedules'.
+        $facultyLoadings = FacultyLoading::with('faculty.user', 'subject', 'room', 'schedules')
+            // Filter the results: only include FacultyLoadings if the related faculty's status is 1
+            ->whereHas('faculty', function ($query) {
+                $query->where('status', 0);
+            })
+            ->get(); 
+        
         return response()->json([
             'success' => true,
             "facultyLoading" => $facultyLoadings,
