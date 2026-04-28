@@ -4,6 +4,7 @@ namespace App\Http\Requests\Auth;
 
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\ValidationException;
 use App\Models\User;
 
 class LoginRequest extends FormRequest
@@ -33,6 +34,18 @@ class LoginRequest extends FormRequest
     public function attemptLogin()
     {
         return Auth::attempt($this->only('email', 'password'));
+    }
+
+    /**
+     * Authenticate the request — throws ValidationException on failure.
+     */
+    public function authenticate(): void
+    {
+        if (!Auth::attempt($this->only('email', 'password'))) {
+            throw ValidationException::withMessages([
+                'email' => [trans('auth.failed')],
+            ]);
+        }
     }
 
     /**
