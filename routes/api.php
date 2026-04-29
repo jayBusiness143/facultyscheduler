@@ -12,6 +12,7 @@ use App\Http\Controllers\FacultyLoadingController;
 use App\Http\Controllers\ScheduleController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ReportController;
+use App\Http\Controllers\UserProfileController;
 
 // Route to get the authenticated user's information
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
@@ -86,5 +87,11 @@ Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])
         Route::get('/faculty-load', [DashboardController::class, 'getFacultyLoadDistribution']);
 
         Route::get('/reports/kpis', [ReportController::class, 'getKpiData']);
+        Route::put('/profile', [UserProfileController::class, 'updateProfile']);
+        Route::put('/profile/password', [UserProfileController::class, 'updatePassword']);
+        Route::post('/profile/avatar', [UserProfileController::class, 'updateAvatar']);
 
     });
+
+
+
