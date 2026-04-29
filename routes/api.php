@@ -52,6 +52,7 @@ Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])
 
         Route::apiResource('faculties', FacultyController::class);
         Route::post('/faculties/{id}/activate', [FacultyController::class, 'activate']);
+        Route::post('/faculties/{faculty}/reset-password', [FacultyController::class, 'resetPassword']);
         Route::post('/faculties/{faculty}/availability', [FacultyController::class, 'setAvailability']);
         Route::get('/faculties/{faculty}/availability', [FacultyController::class, 'getAvailability']);
 

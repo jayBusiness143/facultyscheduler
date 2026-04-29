@@ -362,4 +362,30 @@ class FacultyController extends Controller
 
         return response()->json($formatted);
     }
+
+    public function resetPassword(Faculty $faculty)
+    {
+        try {
+            $user = $faculty->user;
+            if (!$user) {
+                return response()->json([
+                    'message' => 'No user account linked to this faculty.'
+                ], 404);
+            }
+
+            $temporaryPassword = '@password123';
+            $user->password = Hash::make($temporaryPassword);
+            $user->save();
+
+            return response()->json([
+                'message' => 'Faculty password has been reset successfully.',
+                'temporary_password' => $temporaryPassword
+            ], 200);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Failed to reset faculty password.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
 }
