@@ -267,6 +267,16 @@ class FacultyController extends Controller
     public function destroy(Faculty $faculty)
     {
         try {
+            $hasAssignedSubjects = $faculty->loadings()->exists();
+            $hasScheduleData = $faculty->loadings()->whereHas('schedules')->exists();
+            $hasAvailabilityData = $faculty->availabilities()->exists();
+
+            if ($hasAssignedSubjects || $hasScheduleData || $hasAvailabilityData) {
+                return response()->json([
+                    'message' => 'Cannot delete this faculty because there are existing assigned subjects, schedule load records, or availability slots.'
+                ], 422);
+            }
+
             // The database will automatically delete related expertises, availabilities, and loadings.
             $faculty->delete(); 
 
