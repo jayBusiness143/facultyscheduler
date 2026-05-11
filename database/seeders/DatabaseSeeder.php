@@ -14,9 +14,9 @@ class DatabaseSeeder extends Seeder
         // Keep this for all environments (including deploy/production).
         $this->call(UserSeeder::class);
 
-        // Demo data for non-production environments only.
-        if (app()->environment(['local', 'development', 'testing'])) {
+        // Temporarily include demo data for deploy.
+        // if (app()->environment(['local', 'development', 'testing'])) {
             $this->call(DemoDataSeeder::class);
-        }
+        // }
     }
 }
