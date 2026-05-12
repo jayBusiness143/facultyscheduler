@@ -65,7 +65,7 @@ class ReportController extends Controller
         $payload = $this->normalizeExportPayload($request);
 
         return response()
-            ->view('reports.export-print', $payload)
+            ->make($this->renderPrintHtml($payload))
             ->header('Content-Type', 'text/html; charset=UTF-8');
     }
 
@@ -120,5 +120,149 @@ class ReportController extends Controller
     {
         $filename = strtolower(preg_replace('/[^A-Za-z0-9]+/', '-', $title));
         return trim($filename ?: 'report', '-');
+    }
+
+    private function renderPrintHtml(array $payload): string
+    {
+        $title = $this->escapeHtml($payload['title']);
+        $generatedAt = $this->escapeHtml($payload['generatedAt']);
+        $headers = $payload['headers'] ?? [];
+        $rows = !empty($payload['cells']) ? $payload['cells'] : $payload['rows'];
+        $isSchedulesReport = str_contains(strtolower($payload['title']), 'schedule');
+        $isLoadingReport = str_contains(strtolower($payload['title']), 'loading');
+        $tableClass = $isSchedulesReport ? 'schedule-report' : '';
+
+        $headHtml = '';
+        if (!empty($headers)) {
+            $headHtml .= '<thead><tr>';
+            foreach ($headers as $header) {
+                $headHtml .= '<th>' . $this->escapeHtml($header) . '</th>';
+            }
+            $headHtml .= '</tr></thead>';
+        }
+
+        $bodyHtml = '';
+        foreach ($rows as $rowIndex => $row) {
+            $bodyHtml .= '<tr>';
+            foreach ($row as $cellIndex => $cell) {
+                $cellText = is_array($cell) ? ($cell['text'] ?? '') : $cell;
+                $rowSpan = is_array($cell) ? max(1, (int) ($cell['rowSpan'] ?? 1)) : 1;
+                $colSpan = is_array($cell) ? max(1, (int) ($cell['colSpan'] ?? 1)) : 1;
+                $isCovered = $isLoadingReport && trim((string) $cellText) === '';
+                $class = $isCovered ? ' class="covered-cell"' : '';
+
+                $bodyHtml .= '<td' . $class . ' rowspan="' . $rowSpan . '" colspan="' . $colSpan . '">';
+                if ($isSchedulesReport && $cellIndex > 0 && trim((string) $cellText) !== '') {
+                    $slots = $this->durationSlots((string) $cellText);
+                    $height = max(46, ($slots * 58) - 8);
+                    $colorIndex = ($rowIndex + $cellIndex) % 6;
+                    $bodyHtml .= '<div class="schedule-badge schedule-badge-' . $colorIndex . '" style="height:' . $height . 'px;">'
+                        . $this->escapeHtml($cellText)
+                        . '</div>';
+                } else {
+                    $bodyHtml .= $this->escapeHtml($cellText === '' ? ' ' : $cellText);
+                }
+                $bodyHtml .= '</td>';
+            }
+            $bodyHtml .= '</tr>';
+        }
+
+        $contentHtml = count($rows) === 0
+            ? '<div class="empty">No report data available.</div>'
+            : '<table class="' . $tableClass . '">' . $headHtml . '<tbody>' . $bodyHtml . '</tbody></table>';
+
+        return <<<HTML
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{$title} Report</title>
+    <style>
+        @page { size: A4 landscape; margin: 10mm; }
+        * { box-sizing: border-box; }
+        body { margin: 0; font-family: Arial, Helvetica, sans-serif; color: #0f172a; background: #fff; }
+        .report-header { padding: 12px 14px; margin-bottom: 10px; border: 1px solid #e2e8f0; border-radius: 8px; background: #f8fafc; }
+        h1 { margin: 0; font-size: 18px; line-height: 1.25; }
+        .generated { margin-top: 4px; color: #475569; font-size: 12px; }
+        table { width: 100%; border-collapse: collapse; table-layout: auto; font-size: 11px; }
+        thead { display: table-header-group; }
+        th { background: #eef2ff; color: #3730a3; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; }
+        th, td { border: 1px solid #cbd5e1; padding: 7px 8px; vertical-align: middle; text-align: center; }
+        td:first-child, th:first-child { text-align: left; }
+        tbody tr:nth-child(even) td { background: #f8fafc; }
+        tr { page-break-inside: avoid; }
+        .empty { padding: 24px; text-align: center; color: #64748b; border: 1px solid #cbd5e1; }
+        .actions { margin-top: 12px; display: flex; gap: 8px; }
+        button { border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; padding: 8px 12px; cursor: pointer; }
+        .schedule-report th { height: 42px; }
+        .schedule-report td { height: 58px; padding: 4px; overflow: visible; position: relative; }
+        .schedule-report td:first-child { width: 54px; min-width: 54px; color: #64748b; font-size: 10px; font-weight: 600; text-align: right; background: #f8fafc; }
+        .schedule-badge { position: absolute; inset: 4px; z-index: 2; display: flex; align-items: center; justify-content: center; border-left: 3px solid; border-radius: 7px; padding: 6px; font-size: 9px; line-height: 1.25; font-weight: 700; text-align: center; white-space: normal; }
+        .schedule-badge-0 { background: #eff6ff; border-color: #3b82f6; color: #1d4ed8; }
+        .schedule-badge-1 { background: #ecfdf5; border-color: #10b981; color: #047857; }
+        .schedule-badge-2 { background: #f5f3ff; border-color: #8b5cf6; color: #6d28d9; }
+        .schedule-badge-3 { background: #fffbeb; border-color: #f59e0b; color: #b45309; }
+        .schedule-badge-4 { background: #fff1f2; border-color: #f43f5e; color: #be123c; }
+        .schedule-badge-5 { background: #ecfeff; border-color: #06b6d4; color: #0e7490; }
+        .covered-cell { border-top-color: transparent !important; border-bottom-color: transparent !important; color: transparent; }
+        @media print {
+            .actions { display: none; }
+            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        }
+    </style>
+</head>
+<body>
+    <section class="report-header">
+        <h1>{$title} Report</h1>
+        <div class="generated">Generated: {$generatedAt}</div>
+    </section>
+    {$contentHtml}
+    <div class="actions">
+        <button onclick="window.print()">Print / Save as PDF</button>
+        <button onclick="window.close()">Close</button>
+    </div>
+    <script>
+        window.addEventListener('load', function () {
+            setTimeout(function () { window.print(); }, 300);
+        });
+    </script>
+</body>
+</html>
+HTML;
+    }
+
+    private function durationSlots(string $cell): int
+    {
+        if (!preg_match('/(\d{1,2}):(\d{2})\s*(am|pm)\s*-\s*(\d{1,2}):(\d{2})\s*(am|pm)/i', $cell, $matches)) {
+            return 1;
+        }
+
+        $start = $this->timeToMinutes((int) $matches[1], (int) $matches[2], $matches[3]);
+        $end = $this->timeToMinutes((int) $matches[4], (int) $matches[5], $matches[6]);
+
+        if ($end <= $start) {
+            return 1;
+        }
+
+        return max(1, (int) ceil(($end - $start) / 60));
+    }
+
+    private function timeToMinutes(int $hour, int $minute, string $period): int
+    {
+        $period = strtolower($period);
+        if ($period === 'pm' && $hour !== 12) {
+            $hour += 12;
+        }
+        if ($period === 'am' && $hour === 12) {
+            $hour = 0;
+        }
+
+        return ($hour * 60) + $minute;
+    }
+
+    private function escapeHtml(mixed $value): string
+    {
+        return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
     }
 }
