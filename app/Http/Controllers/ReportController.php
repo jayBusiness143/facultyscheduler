@@ -195,12 +195,13 @@ class ReportController extends Controller
         .empty { padding: 24px; text-align: center; color: #64748b; border: 1px solid #cbd5e1; }
         .actions { margin-top: 12px; display: flex; gap: 8px; }
         button { border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; padding: 8px 12px; cursor: pointer; }
-        .schedule-report { width: auto; max-width: 100%; table-layout: fixed; }
+        .schedule-report { width: 100%; max-width: 100%; table-layout: fixed; }
         .schedule-report th { height: 40px; padding: 5px 4px; font-size: 9px; line-height: 1.15; }
-        .schedule-report td { width: 82px; max-width: 82px; height: 52px; padding: 3px; overflow: visible; position: relative; }
-        .schedule-report th:not(:first-child) { width: 82px; max-width: 82px; }
+        .schedule-report td { height: 52px; padding: 3px; overflow: visible; position: relative; }
+        .schedule-report th:not(:first-child),
+        .schedule-report td:not(:first-child) { width: auto; }
         .schedule-report td:first-child,
-        .schedule-report th:first-child { width: 46px; min-width: 46px; max-width: 46px; color: #64748b; font-size: 9px; font-weight: 600; text-align: right; background: #f8fafc; }
+        .schedule-report th:first-child { width: 48px; min-width: 48px; max-width: 48px; color: #64748b; font-size: 9px; font-weight: 600; text-align: right; background: #f8fafc; }
         .schedule-badge { position: absolute; inset: 3px; z-index: 2; display: flex; align-items: center; justify-content: center; border-left: 3px solid; border-radius: 6px; padding: 4px; font-size: 8px; line-height: 1.2; font-weight: 700; text-align: center; white-space: normal; }
         .schedule-badge-0 { background: #eff6ff; border-color: #3b82f6; color: #1d4ed8; }
         .schedule-badge-1 { background: #ecfdf5; border-color: #10b981; color: #047857; }
