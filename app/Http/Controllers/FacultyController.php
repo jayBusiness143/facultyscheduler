@@ -373,6 +373,31 @@ class FacultyController extends Controller
         return response()->json($formatted);
     }
 
+    public function getAllAvailability()
+    {
+        $faculties = Faculty::with('availabilities')
+            ->where('status', 0)
+            ->get();
+
+        $formatted = $faculties->mapWithKeys(function ($faculty) {
+            $availability = $faculty->availabilities
+                ->groupBy('day_of_week')
+                ->map(function ($daySlots) {
+                    return $daySlots->map(function ($slot) {
+                        return [
+                            'id' => $slot->id,
+                            'start' => date('H:i', strtotime($slot->start_time)),
+                            'end' => date('H:i', strtotime($slot->end_time)),
+                        ];
+                    })->values();
+                });
+
+            return [$faculty->id => $availability];
+        });
+
+        return response()->json($formatted);
+    }
+
     public function resetPassword(Faculty $faculty)
     {
         try {
