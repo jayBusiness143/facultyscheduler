@@ -88,11 +88,14 @@ Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])
         Route::get('/faculty-load', [DashboardController::class, 'getFacultyLoadDistribution']);
 
         Route::get('/reports/kpis', [ReportController::class, 'getKpiData']);
+        Route::post('/reports/export/csv', [ReportController::class, 'exportCsv']);
+        Route::post('/reports/export/print', [ReportController::class, 'exportPrint']);
         Route::put('/profile', [UserProfileController::class, 'updateProfile']);
         Route::put('/profile/password', [UserProfileController::class, 'updatePassword']);
         Route::post('/profile/avatar', [UserProfileController::class, 'updateAvatar']);
 
     });
+
 
 
 

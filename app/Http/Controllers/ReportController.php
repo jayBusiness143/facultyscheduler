@@ -3,51 +3,106 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
-use App\Models\Faculty; // Assuming Faculty model maps to 'faculties' table
-use App\Models\FacultyLoading; // Assuming FacultyLoading maps to 'faculty_loadings'
-use App\Models\Subject; // Assuming Subject model maps to 'subjects'
+use App\Models\Faculty;
+use App\Models\FacultyLoading;
+use App\Models\Subject;
 
 class ReportController extends Controller
 {
     /**
      * Retrieves the key performance indicators for the reports page.
      * Includes Total Faculty, Assigned Subjects, and Total Units Loaded.
-     * 
-     * @param Request $request
-     * @return \Illuminate\Http\JsonResponse
      */
     public function getKpiData(Request $request)
     {
-        // KPI 1: Total Active Faculty
-        // Counts all faculty records where status is '0' (active) from the 'faculties' table.
         $totalFaculty = Faculty::where('status', 0)->count();
-
-        // KPI 2: Total Assigned Subjects (Distinct Subjects)
-        // Counts the number of unique subjects that have at least one entry 
-        // in the 'faculty_loadings' table.
         $assignedSubjectsCount = FacultyLoading::distinct('subject_id')->count('subject_id');
-        
-        // KPI 3: Total Units Loaded
-        // Calculates the sum of 'total_units' for ALL distinct subjects that 
-        // have been assigned (are in the 'faculty_loadings' table).
-        // This is the most accurate way to get the total teaching load units.
         $totalUnitsLoaded = Subject::whereIn('id', function ($query) {
             $query->select('subject_id')
                   ->from('faculty_loadings')
                   ->distinct();
         })->sum('total_units');
 
-
-        $kpis = [
-            'totalFaculty' => $totalFaculty,
-            'assignedSubjects' => $assignedSubjectsCount,
-            'totalUnitsLoaded' => (int) $totalUnitsLoaded, // Cast to int for clean API response
-        ];
-
         return response()->json([
             'success' => true,
-            'data' => $kpis,
+            'data' => [
+                'totalFaculty' => $totalFaculty,
+                'assignedSubjects' => $assignedSubjectsCount,
+                'totalUnitsLoaded' => (int) $totalUnitsLoaded,
+            ],
             'message' => 'KPI data retrieved successfully.'
         ], 200);
+    }
+
+    public function exportCsv(Request $request)
+    {
+        $payload = $this->normalizeExportPayload($request);
+        $filename = $this->safeFilename($payload['title']) . '-report.csv';
+
+        return response()->streamDownload(function () use ($payload) {
+            $handle = fopen('php://output', 'w');
+
+            fputcsv($handle, [$payload['title'] . ' Report']);
+            fputcsv($handle, ['Generated: ' . $payload['generatedAt']]);
+            fputcsv($handle, []);
+
+            if (!empty($payload['headers'])) {
+                fputcsv($handle, $payload['headers']);
+            }
+
+            foreach ($payload['rows'] as $row) {
+                fputcsv($handle, $row);
+            }
+
+            fclose($handle);
+        }, $filename, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+        ]);
+    }
+
+    public function exportPrint(Request $request)
+    {
+        $payload = $this->normalizeExportPayload($request);
+
+        return response()
+            ->view('reports.export-print', $payload)
+            ->header('Content-Type', 'text/html; charset=UTF-8');
+    }
+
+    private function normalizeExportPayload(Request $request): array
+    {
+        $validated = $request->validate([
+            'title' => ['required', 'string', 'max:120'],
+            'generatedAt' => ['nullable', 'string', 'max:120'],
+            'headers' => ['nullable', 'array'],
+            'headers.*' => ['nullable', 'string'],
+            'rows' => ['required', 'array'],
+            'rows.*' => ['array'],
+            'rows.*.*' => ['nullable'],
+        ]);
+
+        $headers = collect($validated['headers'] ?? [])
+            ->map(fn ($value) => trim((string) $value))
+            ->values()
+            ->all();
+
+        $rows = collect($validated['rows'] ?? [])
+            ->map(fn ($row) => collect($row)->map(fn ($value) => trim((string) $value))->values()->all())
+            ->filter(fn ($row) => count(array_filter($row, fn ($value) => $value !== '')) > 0)
+            ->values()
+            ->all();
+
+        return [
+            'title' => trim($validated['title']),
+            'generatedAt' => $validated['generatedAt'] ?? now()->format('Y-m-d H:i:s'),
+            'headers' => $headers,
+            'rows' => $rows,
+        ];
+    }
+
+    private function safeFilename(string $title): string
+    {
+        $filename = strtolower(preg_replace('/[^A-Za-z0-9]+/', '-', $title));
+        return trim($filename ?: 'report', '-');
     }
 }
