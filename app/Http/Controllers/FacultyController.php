@@ -375,9 +375,7 @@ class FacultyController extends Controller
 
     public function getAllAvailability()
     {
-        $faculties = Faculty::with('availabilities')
-            ->where('status', 0)
-            ->get();
+        $faculties = Faculty::with('availabilities')->get();
 
         $formatted = $faculties->mapWithKeys(function ($faculty) {
             $availability = $faculty->availabilities
