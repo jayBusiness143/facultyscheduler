@@ -22,15 +22,16 @@
         .actions { margin-top: 12px; display: flex; gap: 8px; }
         button { border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; padding: 8px 12px; cursor: pointer; }
         .schedule-report th { height: 42px; }
-        .schedule-report td { height: 58px; padding: 4px; }
+        .schedule-report td { height: 58px; padding: 4px; overflow: visible; position: relative; }
         .schedule-report td:first-child { width: 54px; min-width: 54px; color: #64748b; font-size: 10px; font-weight: 600; text-align: right; background: #f8fafc; }
-        .schedule-badge { min-height: 46px; height: 100%; display: flex; align-items: center; justify-content: center; border-left: 3px solid; border-radius: 7px; padding: 6px; font-size: 9px; line-height: 1.25; font-weight: 700; text-align: center; white-space: normal; }
+        .schedule-badge { position: absolute; inset: 4px; z-index: 2; display: flex; align-items: center; justify-content: center; border-left: 3px solid; border-radius: 7px; padding: 6px; font-size: 9px; line-height: 1.25; font-weight: 700; text-align: center; white-space: normal; }
         .schedule-badge-0 { background: #eff6ff; border-color: #3b82f6; color: #1d4ed8; }
         .schedule-badge-1 { background: #ecfdf5; border-color: #10b981; color: #047857; }
         .schedule-badge-2 { background: #f5f3ff; border-color: #8b5cf6; color: #6d28d9; }
         .schedule-badge-3 { background: #fffbeb; border-color: #f59e0b; color: #b45309; }
         .schedule-badge-4 { background: #fff1f2; border-color: #f43f5e; color: #be123c; }
         .schedule-badge-5 { background: #ecfeff; border-color: #06b6d4; color: #0e7490; }
+        .covered-cell { border-top-color: transparent !important; border-bottom-color: transparent !important; color: transparent; }
         @media print {
             .actions { display: none; }
             body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -44,8 +45,33 @@
     </section>
 
     @php($isSchedulesReport = str_contains(strtolower($title), 'schedule'))
+    @php($isLoadingReport = str_contains(strtolower($title), 'loading'))
 
-    @if (count($rows) === 0)
+    @php
+        $durationSlots = function ($cell) {
+            if (!preg_match('/(\d{1,2}):(\d{2})\s*(am|pm)\s*-\s*(\d{1,2}):(\d{2})\s*(am|pm)/i', (string) $cell, $m)) {
+                return 1;
+            }
+
+            $toMinutes = function ($hour, $minute, $period) {
+                $hour = (int) $hour;
+                $minute = (int) $minute;
+                $period = strtolower($period);
+                if ($period === 'pm' && $hour !== 12) $hour += 12;
+                if ($period === 'am' && $hour === 12) $hour = 0;
+                return ($hour * 60) + $minute;
+            };
+
+            $start = $toMinutes($m[1], $m[2], $m[3]);
+            $end = $toMinutes($m[4], $m[5], $m[6]);
+            if ($end <= $start) return 1;
+            return max(1, (int) ceil(($end - $start) / 60));
+        };
+    @endphp
+
+    @php($printRows = !empty($cells) ? $cells : $rows)
+
+    @if (count($printRows) === 0)
         <div class="empty">No report data available.</div>
     @else
         <table class="{{ $isSchedulesReport ? 'schedule-report' : '' }}">
@@ -59,16 +85,26 @@
                 </thead>
             @endif
             <tbody>
-                @foreach ($rows as $row)
+                @foreach ($printRows as $row)
                     <tr>
                         @foreach ($row as $cell)
-                            <td>
-                                @if ($isSchedulesReport && !$loop->first && trim((string) $cell) !== '')
-                                    <div class="schedule-badge schedule-badge-{{ ($loop->parent->index + $loop->index) % 6 }}">
-                                        {{ $cell }}
+                            @php($cellText = is_array($cell) ? ($cell['text'] ?? '') : $cell)
+                            @php($rowSpan = is_array($cell) ? ($cell['rowSpan'] ?? 1) : 1)
+                            @php($colSpan = is_array($cell) ? ($cell['colSpan'] ?? 1) : 1)
+                            <td
+                                class="{{ $isLoadingReport && trim((string) $cellText) === '' ? 'covered-cell' : '' }}"
+                                rowspan="{{ $rowSpan }}"
+                                colspan="{{ $colSpan }}"
+                            >
+                                @if ($isSchedulesReport && !$loop->first && trim((string) $cellText) !== '')
+                                    @php($slots = $durationSlots($cellText))
+                                    <div class="schedule-badge schedule-badge-{{ ($loop->parent->index + $loop->index) % 6 }}" style="height: {{ max(46, ($slots * 58) - 8) }}px;">
+                                        {{ $cellText }}
                                     </div>
+                                @elseif ($isLoadingReport && trim((string) $cellText) === '')
+                                    &nbsp;
                                 @else
-                                    {{ $cell }}
+                                    {{ $cellText }}
                                 @endif
                             </td>
                         @endforeach

@@ -79,6 +79,11 @@ class ReportController extends Controller
             'rows' => ['required', 'array'],
             'rows.*' => ['array'],
             'rows.*.*' => ['nullable'],
+            'cells' => ['nullable', 'array'],
+            'cells.*' => ['array'],
+            'cells.*.*.text' => ['nullable'],
+            'cells.*.*.rowSpan' => ['nullable', 'integer', 'min:1', 'max:100'],
+            'cells.*.*.colSpan' => ['nullable', 'integer', 'min:1', 'max:100'],
         ]);
 
         $headers = collect($validated['headers'] ?? [])
@@ -92,11 +97,22 @@ class ReportController extends Controller
             ->values()
             ->all();
 
+        $cells = collect($validated['cells'] ?? [])
+            ->map(fn ($row) => collect($row)->map(fn ($cell) => [
+                'text' => trim((string) ($cell['text'] ?? '')),
+                'rowSpan' => max(1, (int) ($cell['rowSpan'] ?? 1)),
+                'colSpan' => max(1, (int) ($cell['colSpan'] ?? 1)),
+            ])->values()->all())
+            ->filter(fn ($row) => count($row) > 0)
+            ->values()
+            ->all();
+
         return [
             'title' => trim($validated['title']),
             'generatedAt' => $validated['generatedAt'] ?? now()->format('Y-m-d H:i:s'),
             'headers' => $headers,
             'rows' => $rows,
+            'cells' => $cells,
         ];
     }
 
