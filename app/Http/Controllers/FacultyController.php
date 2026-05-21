@@ -355,8 +355,34 @@ class FacultyController extends Controller
 
     public function getAvailability(Faculty $faculty)
     {
-        // Load the availabilities using the Eloquent relationship
-        $availabilities = $faculty->availabilities;
+        $defaultDays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+        $defaultStart = '07:00:00';
+        $defaultEnd = '21:00:00';
+
+        DB::transaction(function () use ($faculty, $defaultDays, $defaultStart, $defaultEnd) {
+            $existingDays = $faculty->availabilities()
+                ->pluck('day_of_week')
+                ->unique()
+                ->all();
+
+            $missingDefaults = collect($defaultDays)
+                ->diff($existingDays)
+                ->map(function ($day) use ($defaultStart, $defaultEnd) {
+                    return [
+                        'day_of_week' => $day,
+                        'start_time' => $defaultStart,
+                        'end_time' => $defaultEnd,
+                    ];
+                })
+                ->values()
+                ->all();
+
+            if (!empty($missingDefaults)) {
+                $faculty->availabilities()->createMany($missingDefaults);
+            }
+        });
+
+        $availabilities = $faculty->availabilities()->get();
 
         // Transform the flat database collection into a grouped structure that the frontend expects.
         // e.g., { "Monday": [{id: 1, start: "09:00", end: "11:00"}], ... }
@@ -367,7 +393,7 @@ class FacultyController extends Controller
                     'start' => date('H:i', strtotime($slot->start_time)), // Format to HH:mm
                     'end'   => date('H:i', strtotime($slot->end_time)),   // Format to HH:mm
                 ];
-            });
+            })->values();
         });
 
         return response()->json($formatted);
