@@ -166,45 +166,35 @@ class DemoDataSeeder extends Seeder
             []
         );
 
-        FacultyAvailability::updateOrCreate(
-            [
-                'faculty_id' => $faculty->id,
-                'day_of_week' => 'Monday',
-                'start_time' => '08:00:00',
-                'end_time' => '12:00:00',
-            ],
-            []
-        );
+        $defaultFacultyAvailabilityDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
-        FacultyAvailability::updateOrCreate(
-            [
-                'faculty_id' => $faculty->id,
-                'day_of_week' => 'Wednesday',
-                'start_time' => '13:00:00',
-                'end_time' => '17:00:00',
-            ],
-            []
-        );
+        foreach ($defaultFacultyAvailabilityDays as $day) {
+            FacultyAvailability::updateOrCreate(
+                [
+                    'faculty_id' => $faculty->id,
+                    'day_of_week' => $day,
+                    'start_time' => '07:00:00',
+                    'end_time' => '21:00:00',
+                ],
+                []
+            );
+        }
 
-        RoomAvailability::updateOrCreate(
-            [
-                'room_id' => $room101->id,
-                'day' => 'Monday',
-                'start_time' => '07:00:00',
-                'end_time' => '17:00:00',
-            ],
-            []
-        );
+        $defaultRoomAvailabilityDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
-        RoomAvailability::updateOrCreate(
-            [
-                'room_id' => $lab201->id,
-                'day' => 'Wednesday',
-                'start_time' => '07:00:00',
-                'end_time' => '17:00:00',
-            ],
-            []
-        );
+        foreach ([$room101, $lab201] as $room) {
+            foreach ($defaultRoomAvailabilityDays as $day) {
+                RoomAvailability::updateOrCreate(
+                    [
+                        'room_id' => $room->id,
+                        'day' => $day,
+                        'start_time' => '07:00:00',
+                        'end_time' => '21:00:00',
+                    ],
+                    []
+                );
+            }
+        }
 
         $loading1 = FacultyLoading::updateOrCreate(
             [
@@ -263,3 +253,5 @@ class DemoDataSeeder extends Seeder
         );
     }
 }
+
+

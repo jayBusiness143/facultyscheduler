@@ -110,12 +110,15 @@ class RoomController extends Controller
         }
 
         try {
-            // 2. I-save lang ang Room sa database
-            $room = Room::create($validator->validated());
+            $room = DB::transaction(function () use ($validator) {
+                $room = Room::create($validator->validated());
+                $this->createDefaultAvailability($room);
 
-            // 3. I-return ang success message ug ang bag-ong room
+                return $room->load('availabilities');
+            });
+
             return response()->json([
-                'message' => 'Room created successfully!',
+                'message' => 'Room created successfully with default availability!',
                 'room' => $room
             ], 201);
 
@@ -127,6 +130,20 @@ class RoomController extends Controller
         }
     }
 
+    private function createDefaultAvailability(Room $room): void
+    {
+        $days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+        foreach ($days as $day) {
+            $room->availabilities()->firstOrCreate(
+                [
+                    'day' => $day,
+                    'start_time' => '07:00:00',
+                    'end_time' => '21:00:00',
+                ]
+            );
+        }
+    }
     public function storeRoomAvailability(Request $request, Room $room)
     {
         // 1. Validation para sa array sa availabilities
@@ -283,3 +300,4 @@ class RoomController extends Controller
         }
     }
 }
+

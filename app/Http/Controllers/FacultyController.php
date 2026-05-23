@@ -122,10 +122,12 @@ class FacultyController extends Controller
                 Expertise::insert($expertiseToInsert);
             }
 
+            $this->createDefaultAvailability($faculty);
+
             DB::commit();
 
             // I-load ang relationships
-            $faculty->load(['user', 'expertises']);
+            $faculty->load(['user', 'expertises', 'availabilities']);
 
             return response()->json([
                 'message' => 'Faculty and User account created successfully!',
@@ -292,6 +294,20 @@ class FacultyController extends Controller
         }
     }
 
+    private function createDefaultAvailability(Faculty $faculty): void
+    {
+        $days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+        foreach ($days as $day) {
+            $faculty->availabilities()->firstOrCreate(
+                [
+                    'day_of_week' => $day,
+                    'start_time' => '07:00:00',
+                    'end_time' => '21:00:00',
+                ]
+            );
+        }
+    }
     public function activate(Faculty $id)
     {
         try {
@@ -450,3 +466,4 @@ class FacultyController extends Controller
         }
     }
 }
+

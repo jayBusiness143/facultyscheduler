@@ -11,44 +11,54 @@ class SubjectController extends Controller
 {
     public function filterSubjects(Request $request)
 {
-    // 1. Get the search term from the request
-    // Accepts ?subject=Introduction...
-    $searchTerm = $request->input('subject');
+    $validated = $request->validate([
+        'subject' => ['nullable', 'string', 'max:255'],
+        'program_id' => ['nullable', 'integer', 'exists:programs,id'],
+        'department' => ['nullable', 'string', 'max:255'],
+    ]);
 
-    if (!$searchTerm) {
-        return response()->json([
-            'success' => false,
-            'message' => 'Please provide a subject to search.'
-        ], 400);
-    }
+    $searchTerm = trim($validated['subject'] ?? '');
+    $programId = $validated['program_id'] ?? null;
+    $department = trim($validated['department'] ?? '');
 
-    // 2. Query the database
-    $subjects = Subject::where(function ($query) use ($searchTerm) {
-        // Explicitly group the OR conditions for the search term
-        $query->where('des_title', 'LIKE', "%{$searchTerm}%")
-              ->orWhere('subject_code', 'LIKE', "%{$searchTerm}%");
-    })
-    // AND only select subjects where the related semester has status = 0
-    ->whereHas('semester', function ($query) {
-        $query->where('status', 0);
-    })
-    ->select('id', 'subject_code', 'des_title', 'total_lec_hrs', 'total_lab_hrs', 'total_hrs') // Only select specific columns
-    ->with('semester')
-    ->get();
+    $subjects = Subject::query()
+        ->when($searchTerm !== '', function ($query) use ($searchTerm) {
+            $query->where(function ($searchQuery) use ($searchTerm) {
+                $searchQuery->where('des_title', 'LIKE', "%{$searchTerm}%")
+                    ->orWhere('subject_code', 'LIKE', "%{$searchTerm}%");
+            });
+        })
+        ->whereHas('semester', function ($query) use ($programId, $department) {
+            $query->where('status', 0);
 
-    // 3. Return the response
+            if ($programId) {
+                $query->where('program_id', $programId);
+            }
+
+            if ($department !== '') {
+                $query->whereHas('program', function ($programQuery) use ($department) {
+                    $programQuery->where('program_name', $department)
+                        ->orWhere('abbreviation', $department);
+                });
+            }
+        })
+        ->with(['semester.program'])
+        ->orderBy('subject_code')
+        ->get();
+
     return response()->json([
         'success' => true,
-        'data' => $subjects
+        'data' => $subjects,
+        'subject' => $subjects,
     ], 200);
 }
 
     public function get_subjects()
     {
-        // Return only subjects whose related semester has status = 1
+        // Return only subjects whose related semester is active.
         $subjects = Subject::whereHas('semester', function ($query) {
-            $query->where('status', 0);
-        })->with('semester')->get();
+            $query->where('status', 1);
+        })->with(['semester.program'])->get();
 
         return response()->json([
             'subject' => $subjects

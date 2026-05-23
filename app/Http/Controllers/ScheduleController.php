@@ -10,25 +10,16 @@ class ScheduleController extends Controller
 {
     public function getScheduleByRoomId($roomId)
     {
-        $schedules = CreateSchedule::whereHas('facultyLoading.room', function ($query) use ($roomId) {
-            $query->where('room_id', $roomId);
-        })
-        ->with([
-            'facultyLoading.room',
-            'facultyLoading.subject',
-            'facultyLoading.faculty.user'
-        ])
-        ->get();
-        $roomDetails = null;
-        if ($schedules->isNotEmpty()) {
-            $room = $schedules->first()->facultyLoading->room;
-            $roomDetails = [
-                'room_id' => $room->id,
-                'room_number' => $room->roomNumber,
-                'room_type' => $room->type,
-                'capacity' => $room->capacity,
-            ];
-        } else {
+        $loadings = FacultyLoading::where('room_id', $roomId)
+            ->with([
+                'room',
+                'subject',
+                'faculty.user',
+                'schedules.program'
+            ])
+            ->get();
+
+        if ($loadings->isEmpty()) {
             return response()->json([
                 'success' => true,
                 'room_details' => null,
@@ -36,20 +27,49 @@ class ScheduleController extends Controller
                 'message' => 'No schedules found for Room ID ' . $roomId
             ]);
         }
-        $scheduleList = $schedules->map(function ($schedule) {
-            return [
-                'schedule_id' => $schedule->id,
-                'year_level' => $schedule->year_level,
-                'section' => $schedule->section,
-                'subject_code' => $schedule->facultyLoading->subject->subject_code,
-                'des_title' => $schedule->facultyLoading->subject->des_title,
-                'type' => $schedule->facultyLoading->type,
-                'day' => $schedule->facultyLoading->day,
-                'start_time' => $schedule->facultyLoading->start_time,
-                'end_time' => $schedule->facultyLoading->end_time,
-                'faculty_name' => $schedule->facultyLoading->faculty->user->name ?? 'N/A' 
+
+        $room = $loadings->first()->room;
+        $roomDetails = $room ? [
+            'room_id' => $room->id,
+            'room_number' => $room->roomNumber,
+            'room_type' => $room->type,
+            'capacity' => $room->capacity,
+        ] : null;
+
+        $scheduleList = $loadings->flatMap(function ($loading) {
+            $base = [
+                'loading_id' => $loading->id,
+                'subject_code' => $loading->subject->subject_code ?? 'N/A',
+                'des_title' => $loading->subject->des_title ?? 'N/A',
+                'type' => $loading->type,
+                'day' => $loading->day,
+                'start_time' => $loading->start_time,
+                'end_time' => $loading->end_time,
+                'faculty_name' => $loading->faculty->user->name ?? 'N/A',
             ];
-        })->values();
+
+            if ($loading->schedules->isEmpty()) {
+                return [[
+                    'schedule_id' => null,
+                    'year_level' => null,
+                    'section' => null,
+                    'program_id' => null,
+                ] + $base];
+            }
+
+            return $loading->schedules->map(function ($schedule) use ($base) {
+                return [
+                    'schedule_id' => $schedule->id,
+                    'year_level' => $schedule->year_level,
+                    'section' => $schedule->section,
+                    'program_id' => $schedule->program_id,
+                ] + $base;
+            });
+        })->sortBy([
+            ['day', 'asc'],
+            ['start_time', 'asc'],
+            ['subject_code', 'asc'],
+        ])->values();
 
         return response()->json([
             'success' => true,

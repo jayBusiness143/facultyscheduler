@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\DB;
 use App\Models\Faculty;
 use App\Models\Room;
 use App\Models\CreateSchedule;
+use App\Models\FacultyLoading;
 use Carbon\Carbon;
 
 class DashboardController extends Controller
@@ -23,12 +24,10 @@ class DashboardController extends Controller
         try {
             // ... (No changes needed here, logic is sound)
             $totalFaculty = Faculty::where('status', 0)->count(); 
-            $totalClasses = CreateSchedule::count();
+            $totalClasses = FacultyLoading::count();
 
             // 3. Rooms Utilized
-            $roomsUtilized = CreateSchedule::join('faculty_loadings', 'create_schedules.faculty_loading_id', '=', 'faculty_loadings.id')
-                                         ->distinct()
-                                         ->count('faculty_loadings.room_id');
+            $roomsUtilized = FacultyLoading::distinct('room_id')->count('room_id');
 
             // 4. Avg. Faculty Load
             $totalLoadUnits = Faculty::where('status', 0)->sum('t_load_units');
@@ -56,11 +55,13 @@ class DashboardController extends Controller
     public function getWeeklyScheduleData()
     {
         try {
-            // Eager-load relationships via `with()` to avoid manual joins
-            $schedules = CreateSchedule::with([
-                'facultyLoading.subject',
-                'facultyLoading.room',
-                'facultyLoading.faculty.user'
+            // Use assigned faculty loadings so the dashboard reflects faculty assignments immediately,
+            // even before a loading is placed into a section class schedule.
+            $loadings = FacultyLoading::with([
+                'subject',
+                'room',
+                'faculty.user',
+                'schedules'
             ])->get();
 
             $dayMap = [
@@ -74,33 +75,35 @@ class DashboardController extends Controller
 
             $allClasses = [];
 
-            foreach ($schedules as $schedule) {
-                $fl = $schedule->facultyLoading;
-                if (!$fl) {
-                    continue; // skip if related faculty loading is missing
+            foreach ($loadings as $loading) {
+                $dayKey = $dayMap[$loading->day] ?? null;
+                if (!$dayKey) {
+                    continue;
                 }
 
-                $dayKey = $dayMap[$fl->day] ?? null;
-                if ($dayKey) {
-                    $weeklyOverviewData[$dayKey]++;
-                    
-                    // **********************************************
-                    // FIX: Change 'H:i' (24hr) to 'h:i A' (12hr with AM/PM)
-                    // **********************************************
-                    $start = $fl->start_time ? Carbon::parse($fl->start_time)->format('h:i A') : null;
-                    $end = $fl->end_time ? Carbon::parse($fl->end_time)->format('h:i A') : null;
+                $weeklyOverviewData[$dayKey]++;
 
-                    $allClasses[] = [
-                        'id' => $schedule->id,
-                        'day' => $dayKey,
-                        'code' => optional($fl->subject)->subject_code,
-                        'title' => optional($fl->subject)->des_title,
-                        'time' => ($start && $end) ? ($start . ' - ' . $end) : null,
-                        'facultyName' => optional(optional($fl->faculty)->user)->name,
-                        'room' => optional($fl->room)->roomNumber
-                    ];
-                }
+                $start = $loading->start_time ? Carbon::parse($loading->start_time)->format('h:i A') : null;
+                $end = $loading->end_time ? Carbon::parse($loading->end_time)->format('h:i A') : null;
+                $sections = $loading->schedules->pluck('section')->filter()->unique()->values()->all();
+
+                $allClasses[] = [
+                    'id' => $loading->id,
+                    'day' => $dayKey,
+                    'code' => optional($loading->subject)->subject_code,
+                    'title' => optional($loading->subject)->des_title,
+                    'time' => ($start && $end) ? ($start . ' - ' . $end) : null,
+                    'facultyName' => optional(optional($loading->faculty)->user)->name,
+                    'room' => optional($loading->room)->roomNumber,
+                    'type' => $loading->type,
+                    'section' => count($sections) ? implode(', ', $sections) : null,
+                    'isAssignedFacultyLoad' => true,
+                ];
             }
+
+            usort($allClasses, function ($a, $b) {
+                return strcmp($a['time'] ?? '', $b['time'] ?? '');
+            });
 
             return response()->json([
                 'success' => true,
@@ -121,20 +124,33 @@ class DashboardController extends Controller
     public function getFacultyLoadDistribution()
     {
         try {
-            // Fetch faculties and their total load units ('t_load_units')
-            $facultyLoads = Faculty::select('users.name', 'faculties.t_load_units')
-                ->join('users', 'faculties.user_id', '=', 'users.id')
-                ->where('faculties.status', 0) // Only active faculty
-                ->orderBy('faculties.t_load_units', 'desc')
+            $faculties = Faculty::with(['user', 'loadings.subject'])
+                ->where('status', 0)
                 ->get();
-            
-            $loadData = $facultyLoads->map(function ($faculty) {
+
+            $loadData = $faculties->map(function ($faculty) {
+                $assignedSubjects = $faculty->loadings
+                    ->filter(fn ($loading) => $loading->subject)
+                    ->unique('subject_id');
+
+                $assignedLoad = $assignedSubjects->sum(function ($loading) {
+                    $subject = $loading->subject;
+                    return (float) ($subject->total_units ?? $subject->total_hrs ?? 0);
+                });
+
+                $baseLimit = (float) ($faculty->t_load_units ?? 0);
+                $overloadLimit = (float) ($faculty->overload_units ?? 0);
+                $maxLoad = $baseLimit + $overloadLimit;
+
                 return [
-                    'name' => $faculty->name,
-                    'load' => $faculty->t_load_units,
-                    // The frontend component handles the calculation based on MAX_LOAD
+                    'name' => optional($faculty->user)->name ?? 'Unnamed Faculty',
+                    'load' => $assignedLoad,
+                    'maxLoad' => $maxLoad > 0 ? $maxLoad : $baseLimit,
+                    'baseLoad' => $baseLimit,
+                    'overloadUnits' => $overloadLimit,
+                    'assignedSubjects' => $assignedSubjects->count(),
                 ];
-            });
+            })->sortByDesc('load')->values();
 
             return response()->json(['success' => true, 'data' => $loadData]);
 
